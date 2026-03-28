@@ -286,6 +286,30 @@ class extends Component {
         $this->lastPointsScored = null;
     }
 
+    public bool $showAbandonConfirm = false;
+
+    public function confirmAbandon(): void
+    {
+        $this->showAbandonConfirm = true;
+    }
+
+    public function cancelAbandon(): void
+    {
+        $this->showAbandonConfirm = false;
+    }
+
+    public function abandonMatch(): void
+    {
+        $abandonedStatus = MatchStatus::abandoned()->first();
+
+        $this->match->update([
+            'match_status_id' => $abandonedStatus->id,
+            'completed_at' => now(),
+        ]);
+
+        $this->redirect(route('arena.match-setup'), navigate: true);
+    }
+
     #[On('init-ai-turn')]
     public function initAiTurn(AiOpponentService $aiOpponentService)
     {
@@ -358,6 +382,15 @@ class extends Component {
 
             {{-- History Log --}}
             <x-match-history-log :turns="$this->match->turns"/>
+
+            {{-- Abandon Match --}}
+            <button
+                wire:click="confirmAbandon"
+                class="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-wide bg-danger/10 border border-danger/20 text-danger hover:bg-danger/20 transition-all mt-4"
+            >
+                <span class="material-symbols-outlined text-lg">flag</span>
+                Abandonar Partida
+            </button>
         </div>
     </aside>
 
@@ -453,6 +486,31 @@ class extends Component {
             <livewire:arena.token-return :match="$this->match" :key="'token-return-' . $this->match->id"/>
         @endif
     </main>
+
+    {{-- Abandon Confirmation Modal --}}
+    @if ($showAbandonConfirm)
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div class="bg-surface-container p-8 rounded-3xl border border-outline-variant/10 max-w-sm w-full mx-4 text-center space-y-6">
+                <span class="material-symbols-outlined text-5xl text-danger">warning</span>
+                <h2 class="text-xl font-black font-display text-on-surface uppercase">Abandonar Partida?</h2>
+                <p class="text-sm text-on-surface-variant">Essa ação não pode ser desfeita. Você não receberá XP por esta partida.</p>
+                <div class="flex gap-3">
+                    <button
+                        wire:click="cancelAbandon"
+                        class="flex-1 px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-wide bg-surface-container-low border border-outline-variant/20 text-on-surface hover:bg-surface-container-high transition-all"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        wire:click="abandonMatch"
+                        class="flex-1 px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-wide bg-danger text-on-danger hover:brightness-110 transition-all"
+                    >
+                        Abandonar
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 
     {{-- Free Color Selection Modal --}}
     @if ($showFreeColorModal)

@@ -157,7 +157,7 @@ new #[Layout('layouts::app')] #[Title('Nova Partida')] class extends Component
 
                     {{-- Trade representations --}}
                     <div class="flex flex-col gap-2 w-full">
-                        @foreach($card->trades->take(2) as $trade)
+                        @foreach($card->trades as $trade)
                             <div class="flex items-center justify-center gap-1.5">
                                 @foreach($trade->items->where('tradeSide.slug', 'left') as $item)
                                     @for($i = 0; $i < $item->quantity; $i++)

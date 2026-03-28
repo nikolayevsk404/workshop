@@ -1,0 +1,206 @@
+Voce e um desenvolvedor Laravel senior.
+
+## Stack do projeto
+- Laravel 13, PHP 8.5
+- Livewire 4 (full-page components com pages:: prefix)
+- Pest PHP 4 (testes)
+- Tailwind CSS 4 (via @theme no app.css)
+- pgsql (via Laravel Sail)
+- Interface em pt-BR
+
+## Arquivos de referencia importantes
+- CLAUDE.md — regras obrigatorias do projeto (LEIA PRIMEIRO)
+- docs/project-phases.md — plano completo de fases
+- docs/user-stories.md — user stories
+- docs/project-description.md — descricao geral
+- docs/design/ — designs de referencia (HTML + screenshots)
+
+## Sua tarefa agora
+Implemente COMPLETAMENTE a fase descrita abaixo.
+
+Para cada item:
+1. Implemente o codigo completo (nao deixe TODOs ou placeholders)
+2. Crie os testes listados
+3. Rode os testes com: ./vendor/bin/sail artisan test --compact
+4. Se um teste falhar, corrija o codigo e rode novamente
+5. So passe pro proximo item quando os testes passarem
+
+## Regras obrigatorias
+- LEIA o CLAUDE.md antes de comecar — ele contem as convencoes do projeto
+- Todos os comandos devem usar ./vendor/bin/sail (Docker/Sail)
+- Factories devem criar todas as dependencias (role, user, product, etc.)
+- Nomes de classes, arquivos e metodos devem seguir EXATAMENTE o que esta descrito
+- Todos os textos de interface em pt-BR
+- Nao pule nenhum item marcado com [ ]
+- Rode ./vendor/bin/sail artisan test --compact ao final para garantir que TUDO passa
+- Rode ./vendor/bin/sail bin pint --dirty para formatar o codigo
+
+## Fase a implementar
+## Phase 7: Core Game Mechanics
+
+> Implements dice rolling, token trading, card purchasing, and scoring logic.
+> Reference: US-4.2, US-4.3, US-4.4, US-4.5, US-4.6, US-4.9, US-5.1
+
+### Phase 7.1: Dice Service (US-4.2, US-4.4)
+
+- [ ] Create `App\Services\DiceService`
+- [ ] Method `roll(): string` — returns one of: `red`, `green`, `white`, `yellow`, `blue`, `free` (equal probability)
+- [ ] Method `applyRoll(GameMatch $match, int $participantTypeId, string $colorSlug): void`
+    - Validates it's the correct participant's turn
+    - Validates the participant hasn't already acted this turn
+    - Adds 1 token of the given color to the participant's inventory
+    - Creates a `match_turns` record with `roll_dice` action and JSON data
+    - Sets `has_acted_this_turn = true`
+
+**Tests (`tests/Feature/Services/DiceServiceTest.php`):**
+- [ ] Test `roll()` returns a valid color slug or "free"
+- [ ] Test `applyRoll()` increases token quantity by 1 for the correct color
+- [ ] Test `applyRoll()` creates a turn record with correct action type and data
+- [ ] Test `applyRoll()` sets `has_acted_this_turn` to true
+- [ ] Test `applyRoll()` fails if participant has already acted this turn
+- [ ] Test `applyRoll()` fails if it's not the participant's turn
+- [ ] Test rolling "free" requires a separate color choice before applying
+
+### Phase 7.2: Roll Dice Action (Livewire)
+
+- [ ] Add `rollDice()` method to game board component
+- [ ] Call `DiceService::roll()` and display the result
+- [ ] If result is "free", show color selection modal (US-4.4)
+- [ ] On color selection (or direct color result), call `DiceService::applyRoll()`
+- [ ] Refresh token inventory and match history on the board
+- [ ] Disable "Roll Dice" button after rolling
+
+**Tests (`tests/Feature/Match/RollDiceActionTest.php`):**
+- [ ] Test player can roll dice on their turn via Livewire
+- [ ] Test rolling dice updates token inventory in the UI
+- [ ] Test rolling dice disables further rolling this turn
+- [ ] Test "free" roll shows color selection modal
+- [ ] Test selecting a color after "free" roll applies the token correctly
+- [ ] Test player cannot roll dice on AI's turn
+- [ ] Test player cannot roll dice after already acting this turn
+
+### Phase 7.3: Trade Service (US-4.3)
+
+- [ ] Create `App\Services\TradeService`
+- [ ] Method `executeTrade(GameMatch $match, int $participantTypeId, int $quotationCardTradeId, string $direction): void`
+    - Validates it's the participant's turn and they haven't acted
+    - Validates the quotation card trade belongs to one of the match's active quotation cards
+    - Determines give/receive sides based on `$direction` (`left_to_right` or `right_to_left`)
+    - Validates participant has sufficient tokens to give
+    - Removes given tokens from inventory
+    - Adds received tokens to inventory
+    - Creates `match_turns` record with `trade` action and JSON data
+    - Sets `has_acted_this_turn = true`
+
+**Tests (`tests/Feature/Services/TradeServiceTest.php`):**
+- [ ] Test valid trade removes correct tokens and adds correct tokens
+- [ ] Test trade creates a turn record with correct action data
+- [ ] Test trade fails with insufficient tokens (no changes made)
+- [ ] Test trade fails if participant already acted this turn
+- [ ] Test trade fails if it's not the participant's turn
+- [ ] Test trade works in both directions (left-to-right and right-to-left)
+- [ ] Test trade fails if quotation card is not active in this match
+- [ ] Test only 1 trade allowed per turn
+
+### Phase 7.4: Trade Action (Livewire)
+
+- [ ] Add `executeTrade($quotationCardTradeId, $direction)` method to game board component
+- [ ] Validate and call `TradeService::executeTrade()`
+- [ ] Refresh token inventory, quotation card availability, and match history
+- [ ] Show error flash if trade is invalid
+- [ ] Disable trading after trade is executed
+
+**Tests (`tests/Feature/Match/TradeActionTest.php`):**
+- [ ] Test player can execute a valid trade via Livewire
+- [ ] Test trade updates token inventory in the UI
+- [ ] Test trading disables further actions this turn
+- [ ] Test invalid trade shows error message
+- [ ] Test player cannot trade on AI's turn
+
+### Phase 7.5: Scoring Service (US-5.1, US-4.9)
+
+- [ ] Create `App\Services\ScoringService`
+- [ ] Method `calculatePoints(int $remainingTokens, int $cardStarCount, int $compartmentStarBonuses): int`
+    - Compute effective star count = `cardStarCount + compartmentStarBonuses` (capped at 2)
+    - Look up `scoring_rules` table for the matching bracket and star count
+    - Return the points
+- [ ] Method `getActiveStarBonuses(GameMatch $match): int`
+    - Count compartments with `is_star_bonus_active = true`
+
+**Tests (`tests/Feature/Services/ScoringServiceTest.php`):**
+- [ ] Test all 12 scoring combinations (4 token brackets × 3 star levels) return correct points
+- [ ] Test 0 remaining tokens with 0 stars = 5 points
+- [ ] Test 0 remaining tokens with 2 stars = 12 points
+- [ ] Test 3+ remaining tokens with 0 stars = 1 point
+- [ ] Test compartment star bonus adds to card star count
+- [ ] Test effective star count is capped at 2
+- [ ] Test `getActiveStarBonuses()` correctly counts emptied compartments
+
+### Phase 7.6: Card Purchase Service (US-4.5, US-4.9)
+
+- [ ] Create `App\Services\CardPurchaseService`
+- [ ] Method `purchaseCard(GameMatch $match, int $participantTypeId, int $matchCompartmentCardId): int`
+    - Validates the participant has acted this turn (must roll or trade first)
+    - Validates the card is face-up (lowest position unpurchased in its compartment)
+    - Validates participant has all required tokens
+    - Removes the 5 matching tokens from inventory
+    - Marks card as purchased, sets `purchased_by_participant_type_id` and `purchased_at`
+    - Calculates points via `ScoringService` (considering star bonuses)
+    - Stores `points_scored` on the card record
+    - Updates match `player_score` or `ai_score`
+    - Updates match `player_cards_purchased` or `ai_cards_purchased`
+    - If compartment is now empty, activate `is_star_bonus_active` and increment `compartments_emptied`
+    - Creates `match_turns` record with `purchase_card` action
+    - Returns points scored
+
+**Tests (`tests/Feature/Services/CardPurchaseServiceTest.php`):**
+- [ ] Test successful purchase removes correct tokens from inventory
+- [ ] Test successful purchase marks card as purchased with correct participant
+- [ ] Test points are calculated correctly and stored on the card record
+- [ ] Test match score is updated for the correct participant
+- [ ] Test match `player_cards_purchased` / `ai_cards_purchased` counter increments
+- [ ] Test purchase fails if participant hasn't acted this turn (no roll/trade before purchase)
+- [ ] Test purchase fails if card is not face-up
+- [ ] Test purchase fails if participant lacks required tokens
+- [ ] Test compartment star bonus activates when last card in compartment is purchased
+- [ ] Test `compartments_emptied` increments when a compartment becomes empty
+- [ ] Test star bonus correctly affects scoring of subsequent purchases
+- [ ] Test purchase creates turn record with correct action data
+
+### Phase 7.7: Card Purchase Action (Livewire)
+
+- [ ] Add `purchaseCard($matchCompartmentCardId)` method to game board component
+- [ ] Call `CardPurchaseService::purchaseCard()`
+- [ ] Display points earned animation/flash
+- [ ] Refresh all board state (inventory, compartments, scores, history)
+- [ ] Show purchasable cards with "Buy" button only when eligible (has acted + has tokens)
+
+**Tests (`tests/Feature/Match/PurchaseCardActionTest.php`):**
+- [ ] Test player can purchase an eligible card via Livewire
+- [ ] Test purchase updates score display on the board
+- [ ] Test purchase removes tokens from inventory display
+- [ ] Test next card in compartment becomes visible after purchase
+- [ ] Test "Buy" button only appears for eligible cards
+
+### Phase 7.8: Token Limit Enforcement (US-4.6)
+
+- [ ] Create `App\Services\TokenLimitService`
+- [ ] Method `isOverLimit(GameMatch $match, int $participantTypeId): bool` — checks if total tokens > 10
+- [ ] Method `getExcessCount(GameMatch $match, int $participantTypeId): int`
+- [ ] Method `returnTokens(GameMatch $match, int $participantTypeId, array $tokensToReturn): void`
+    - Validates total returned equals the excess
+    - Validates participant has the tokens to return
+    - Decrements token inventories
+    - Creates `match_turns` record with `return_tokens` action
+- [ ] Integrate token limit check into end-turn flow (block ending turn if over limit)
+
+**Tests (`tests/Feature/Services/TokenLimitServiceTest.php`):**
+- [ ] Test `isOverLimit()` returns true when total tokens > 10
+- [ ] Test `isOverLimit()` returns false when total tokens <= 10
+- [ ] Test `getExcessCount()` returns correct count
+- [ ] Test `returnTokens()` decreases correct token inventories
+- [ ] Test `returnTokens()` fails if returned amount doesn't match excess
+- [ ] Test `returnTokens()` creates turn record with correct data
+- [ ] Test `returnTokens()` fails if participant doesn't have the tokens specified
+
+---

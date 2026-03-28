@@ -3,6 +3,7 @@
 use App\Models\GameMatch;
 use App\Models\MatchTokenInventory;
 use App\Models\ParticipantType;
+use App\Services\TokenLimitService;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
@@ -82,7 +83,7 @@ new class extends Component
         }
     }
 
-    public function confirmReturn(): void
+    public function confirmReturn(TokenLimitService $tokenLimitService): void
     {
         if (! $this->canConfirm) {
             return;
@@ -90,19 +91,10 @@ new class extends Component
 
         $playerType = ParticipantType::where('slug', 'player')->first();
 
-        foreach ($this->tokensToReturn as $colorSlug => $qty) {
-            if ($qty <= 0) {
-                continue;
-            }
-
-            $inventory = $this->match->tokenInventories()
-                ->where('participant_type_id', $playerType->id)
-                ->whereHas('tokenColor', fn ($q) => $q->where('slug', $colorSlug))
-                ->first();
-
-            if ($inventory) {
-                $inventory->update(['quantity' => max(0, $inventory->quantity - $qty)]);
-            }
+        try {
+            $tokenLimitService->returnTokens($this->match, $playerType->id, $this->tokensToReturn);
+        } catch (\InvalidArgumentException $e) {
+            return;
         }
 
         $this->tokensToReturn = [];

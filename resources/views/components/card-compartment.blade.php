@@ -1,6 +1,8 @@
 @props([
     'compartment',
     'position' => 1,
+    'canPurchase' => false,
+    'playerInventories' => collect(),
 ])
 
 @php
@@ -13,6 +15,12 @@
     $cardTokens = $card?->tokens ?? collect();
 
     $colorOrder = ['red', 'green', 'white', 'yellow', 'blue'];
+
+    $playerTokens = collect($playerInventories)->mapWithKeys(fn ($inv) => [$inv->tokenColor->slug => $inv->quantity]);
+    $canAffordCard = $faceUpCard && $card && $cardTokens->every(function ($token) use ($playerTokens) {
+        return ($playerTokens[$token->tokenColor->slug] ?? 0) >= $token->quantity;
+    });
+    $showBuyButton = $canPurchase && $canAffordCard;
 @endphp
 
 <div @class([
@@ -56,6 +64,15 @@
         <div class="flex items-center justify-center py-6 text-outline-variant">
             <span class="text-xs">Vazio</span>
         </div>
+    @endif
+
+    @if ($showBuyButton)
+        <button
+            wire:click="purchaseCard({{ $faceUpCard->id }})"
+            class="w-full mt-3 py-2 rounded-xl bg-secondary text-on-secondary font-bold font-display uppercase tracking-widest text-xs hover:brightness-110 transition-all active:scale-[0.98]"
+        >
+            Comprar Carta
+        </button>
     @endif
 
     @if ($compartment->is_star_bonus_active)

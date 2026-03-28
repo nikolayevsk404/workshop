@@ -1,6 +1,7 @@
 @props([
     'quotationCard',
     'playerInventories' => collect(),
+    'canTrade' => false,
 ])
 
 @php
@@ -19,11 +20,20 @@
             $leftItems = $trade->leftItems;
             $rightItems = $trade->rightItems;
 
-            $canAfford = true;
+            $canAffordLeftToRight = $canTrade;
             foreach ($leftItems as $item) {
                 $slug = $item->tokenColor->slug;
                 if (($playerTokens[$slug] ?? 0) < $item->quantity) {
-                    $canAfford = false;
+                    $canAffordLeftToRight = false;
+                    break;
+                }
+            }
+
+            $canAffordRightToLeft = $canTrade;
+            foreach ($rightItems as $item) {
+                $slug = $item->tokenColor->slug;
+                if (($playerTokens[$slug] ?? 0) < $item->quantity) {
+                    $canAffordRightToLeft = false;
                     break;
                 }
             }
@@ -31,8 +41,8 @@
 
         <div @class([
             'p-3 rounded-xl border transition-all',
-            'bg-surface-container-lowest/40 border-outline-variant/10' => $canAfford,
-            'bg-surface-container-lowest/20 border-outline-variant/5 opacity-50' => !$canAfford,
+            'bg-surface-container-lowest/40 border-outline-variant/10' => $canAffordLeftToRight || $canAffordRightToLeft,
+            'bg-surface-container-lowest/20 border-outline-variant/5 opacity-50' => !$canAffordLeftToRight && !$canAffordRightToLeft,
         ])>
             <div class="flex items-center justify-around gap-2">
                 <div class="flex items-center gap-2">
@@ -56,16 +66,30 @@
                 </div>
             </div>
 
-            <button
-                @class([
-                    'w-full mt-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors',
-                    'bg-surface-variant text-on-surface-variant hover:bg-primary hover:text-on-primary' => $canAfford,
-                    'bg-surface-variant/50 text-on-surface-variant/50 cursor-not-allowed' => !$canAfford,
-                ])
-                @if (!$canAfford) disabled @endif
-            >
-                Executar Troca
-            </button>
+            <div class="flex gap-2 mt-2">
+                <button
+                    wire:click="executeTrade({{ $trade->id }}, 'left_to_right')"
+                    @class([
+                        'flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors',
+                        'bg-surface-variant text-on-surface-variant hover:bg-primary hover:text-on-primary' => $canAffordLeftToRight,
+                        'bg-surface-variant/50 text-on-surface-variant/50 cursor-not-allowed' => !$canAffordLeftToRight,
+                    ])
+                    @if (!$canAffordLeftToRight) disabled @endif
+                >
+                    →
+                </button>
+                <button
+                    wire:click="executeTrade({{ $trade->id }}, 'right_to_left')"
+                    @class([
+                        'flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors',
+                        'bg-surface-variant text-on-surface-variant hover:bg-primary hover:text-on-primary' => $canAffordRightToLeft,
+                        'bg-surface-variant/50 text-on-surface-variant/50 cursor-not-allowed' => !$canAffordRightToLeft,
+                    ])
+                    @if (!$canAffordRightToLeft) disabled @endif
+                >
+                    ←
+                </button>
+            </div>
         </div>
     @endforeach
 </div>

@@ -3,6 +3,10 @@
 use App\Models\GameMatch;
 use App\Models\MatchStatus;
 use App\Models\ParticipantType;
+use App\Services\CardPurchaseService;
+use App\Services\DiceService;
+use App\Services\TokenLimitService;
+use App\Services\TradeService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -10,6 +14,16 @@ use Livewire\Component;
 new #[Layout('layouts::app')] #[\Livewire\Attributes\Title('Partida')] class extends Component
 {
     public GameMatch $match;
+
+    public ?string $lastRollResult = null;
+
+    public bool $showFreeColorModal = false;
+
+    public ?string $flashMessage = null;
+
+    public ?string $flashType = null;
+
+    public ?int $lastPointsScored = null;
 
     public function mount(GameMatch $match): void
     {
@@ -21,19 +35,93 @@ new #[Layout('layouts::app')] #[\Livewire\Attributes\Title('Partida')] class ext
             return;
         }
 
-        $this->match = $match->load([
-            'user',
-            'difficultyTier',
-            'matchStatus',
-            'currentParticipantType',
-            'quotationCards.trades.leftItems.tokenColor',
-            'quotationCards.trades.rightItems.tokenColor',
-            'compartments.cards.card.tokens.tokenColor',
-            'tokenInventories.tokenColor',
-            'tokenInventories.participantType',
-            'turns.participantType',
-            'turns.turnActionType',
-        ]);
+        $this->loadMatch($match);
+    }
+
+    public function rollDice(DiceService $diceService): void
+    {
+        $this->resetFlash();
+        $playerType = ParticipantType::where('slug', 'player')->first();
+
+        if ($this->match->current_participant_type_id !== $playerType->id) {
+            $this->setFlash('Não é a sua vez.', 'error');
+            return;
+        }
+
+        if ($this->match->has_acted_this_turn) {
+            $this->setFlash('Você já realizou uma ação neste turno.', 'error');
+            return;
+        }
+
+        $result = $diceService->roll();
+        $this->lastRollResult = $result;
+
+        if ($result === 'free') {
+            $this->showFreeColorModal = true;
+            return;
+        }
+
+        try {
+            $diceService->applyRoll($this->match, $playerType->id, $result);
+            $this->refreshMatch();
+        } catch (\InvalidArgumentException $e) {
+            $this->setFlash($e->getMessage(), 'error');
+        }
+    }
+
+    public function selectFreeColor(string $colorSlug, DiceService $diceService): void
+    {
+        $this->showFreeColorModal = false;
+        $playerType = ParticipantType::where('slug', 'player')->first();
+
+        try {
+            $diceService->applyRoll($this->match, $playerType->id, $colorSlug);
+            $this->lastRollResult = $colorSlug;
+            $this->refreshMatch();
+        } catch (\InvalidArgumentException $e) {
+            $this->setFlash($e->getMessage(), 'error');
+        }
+    }
+
+    public function executeTrade(int $quotationCardTradeId, string $direction, TradeService $tradeService): void
+    {
+        $this->resetFlash();
+        $playerType = ParticipantType::where('slug', 'player')->first();
+
+        try {
+            $tradeService->executeTrade($this->match, $playerType->id, $quotationCardTradeId, $direction);
+            $this->refreshMatch();
+        } catch (\InvalidArgumentException $e) {
+            $this->setFlash($e->getMessage(), 'error');
+        }
+    }
+
+    public function purchaseCard(int $matchCompartmentCardId, CardPurchaseService $purchaseService): void
+    {
+        $this->resetFlash();
+        $playerType = ParticipantType::where('slug', 'player')->first();
+
+        try {
+            $points = $purchaseService->purchaseCard($this->match, $playerType->id, $matchCompartmentCardId);
+            $this->lastPointsScored = $points;
+            $this->setFlash("+{$points} pontos!", 'success');
+            $this->refreshMatch();
+        } catch (\InvalidArgumentException $e) {
+            $this->setFlash($e->getMessage(), 'error');
+        }
+    }
+
+    public function returnTokens(array $tokensToReturn, TokenLimitService $tokenLimitService): void
+    {
+        $this->resetFlash();
+        $playerType = ParticipantType::where('slug', 'player')->first();
+
+        try {
+            $tokenLimitService->returnTokens($this->match, $playerType->id, $tokensToReturn);
+            $this->refreshMatch();
+        } catch (\InvalidArgumentException $e) {
+            $this->setFlash($e->getMessage(), 'error');
+        }
     }
 
     #[Computed]
@@ -59,6 +147,26 @@ new #[Layout('layouts::app')] #[\Livewire\Attributes\Title('Partida')] class ext
     }
 
     #[Computed]
+    public function isPlayerTurn(): bool
+    {
+        $playerType = ParticipantType::where('slug', 'player')->first();
+
+        return $this->match->current_participant_type_id === $playerType?->id;
+    }
+
+    #[Computed]
+    public function canRollOrTrade(): bool
+    {
+        return $this->isPlayerTurn && ! $this->match->has_acted_this_turn;
+    }
+
+    #[Computed]
+    public function canPurchase(): bool
+    {
+        return $this->isPlayerTurn && $this->match->has_acted_this_turn;
+    }
+
+    #[Computed]
     public function currentTurnLabel(): string
     {
         $participant = $this->match->currentParticipantType;
@@ -80,6 +188,41 @@ new #[Layout('layouts::app')] #[\Livewire\Attributes\Title('Partida')] class ext
             'dice_rolls' => $turns->filter(fn ($t) => $t->turnActionType?->slug === 'roll_dice')->count(),
             'trades' => $turns->filter(fn ($t) => $t->turnActionType?->slug === 'trade')->count(),
         ];
+    }
+
+    private function refreshMatch(): void
+    {
+        $this->loadMatch($this->match->fresh());
+    }
+
+    private function loadMatch(GameMatch $match): void
+    {
+        $this->match = $match->load([
+            'user',
+            'difficultyTier',
+            'matchStatus',
+            'currentParticipantType',
+            'quotationCards.trades.leftItems.tokenColor',
+            'quotationCards.trades.rightItems.tokenColor',
+            'compartments.cards.card.tokens.tokenColor',
+            'tokenInventories.tokenColor',
+            'tokenInventories.participantType',
+            'turns.participantType',
+            'turns.turnActionType',
+        ]);
+    }
+
+    private function setFlash(string $message, string $type): void
+    {
+        $this->flashMessage = $message;
+        $this->flashType = $type;
+    }
+
+    private function resetFlash(): void
+    {
+        $this->flashMessage = null;
+        $this->flashType = null;
+        $this->lastPointsScored = null;
     }
 
 };
@@ -115,6 +258,18 @@ new #[Layout('layouts::app')] #[\Livewire\Attributes\Title('Partida')] class ext
                         <span class="text-lg font-black font-display text-tertiary">{{ str_pad($this->matchStats['trades'], 2, '0', STR_PAD_LEFT) }}</span>
                     </div>
                 </div>
+
+                {{-- Scores --}}
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-primary/10 p-3 rounded-xl border border-primary/20 text-center">
+                        <span class="text-[10px] uppercase tracking-widest text-primary font-bold">Você</span>
+                        <p class="text-2xl font-black font-display text-primary">{{ $this->match->player_score }}</p>
+                    </div>
+                    <div class="bg-tertiary/10 p-3 rounded-xl border border-tertiary/20 text-center">
+                        <span class="text-[10px] uppercase tracking-widest text-tertiary font-bold">IA</span>
+                        <p class="text-2xl font-black font-display text-tertiary">{{ $this->match->ai_score }}</p>
+                    </div>
+                </div>
             </div>
 
             {{-- Turn Indicator --}}
@@ -137,6 +292,18 @@ new #[Layout('layouts::app')] #[\Livewire\Attributes\Title('Partida')] class ext
 
     {{-- Main Content Area --}}
     <main class="flex-1 overflow-y-auto p-8 space-y-8">
+        {{-- Flash Messages --}}
+        @if ($flashMessage)
+            <div @class([
+                'p-4 rounded-xl border flex items-center gap-3',
+                'bg-danger/10 border-danger/20 text-danger' => $flashType === 'error',
+                'bg-secondary/10 border-secondary/20 text-secondary' => $flashType === 'success',
+            ])>
+                <span class="material-symbols-outlined">{{ $flashType === 'error' ? 'error' : 'check_circle' }}</span>
+                <span class="text-sm font-bold">{{ $flashMessage }}</span>
+            </div>
+        @endif
+
         {{-- Token Inventory --}}
         <x-token-inventory :inventories="$this->playerInventories" />
 
@@ -145,7 +312,12 @@ new #[Layout('layouts::app')] #[\Livewire\Attributes\Title('Partida')] class ext
             <label class="font-display text-xs uppercase tracking-[0.3em] text-on-surface-variant font-bold">Compartimentos</label>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 @foreach ($this->match->compartments->sortBy('position') as $compartment)
-                    <x-card-compartment :compartment="$compartment" :position="$compartment->position" />
+                    <x-card-compartment
+                        :compartment="$compartment"
+                        :position="$compartment->position"
+                        :canPurchase="$this->canPurchase"
+                        :playerInventories="$this->playerInventories"
+                    />
                 @endforeach
             </div>
         </section>
@@ -154,7 +326,15 @@ new #[Layout('layouts::app')] #[\Livewire\Attributes\Title('Partida')] class ext
         <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
             <div class="lg:col-span-12">
                 <div class="bg-surface-container p-1 rounded-3xl border border-outline-variant/10">
-                    <button class="w-full bg-gradient-to-br from-primary-dim to-primary rounded-[1.4rem] flex flex-col items-center justify-center gap-4 p-8 group transition-all hover:brightness-110 active:scale-[0.98] relative overflow-hidden">
+                    <button
+                        wire:click="rollDice"
+                        @class([
+                            'w-full rounded-[1.4rem] flex flex-col items-center justify-center gap-4 p-8 group transition-all relative overflow-hidden',
+                            'bg-gradient-to-br from-primary-dim to-primary hover:brightness-110 active:scale-[0.98]' => $this->canRollOrTrade,
+                            'bg-surface-variant/50 cursor-not-allowed opacity-50' => !$this->canRollOrTrade,
+                        ])
+                        @if (!$this->canRollOrTrade) disabled @endif
+                    >
                         <div class="w-20 h-20 rounded-2xl bg-on-primary/20 flex items-center justify-center rotate-12 group-hover:rotate-0 transition-transform duration-500">
                             <span class="material-symbols-outlined text-5xl text-on-primary font-black">casino</span>
                         </div>
@@ -175,6 +355,7 @@ new #[Layout('layouts::app')] #[\Livewire\Attributes\Title('Partida')] class ext
                     <x-quotation-card-display
                         :quotationCard="$quotationCard"
                         :playerInventories="$this->playerInventories"
+                        :canTrade="$this->canRollOrTrade"
                     />
                 @endforeach
             </div>
@@ -185,4 +366,28 @@ new #[Layout('layouts::app')] #[\Livewire\Attributes\Title('Partida')] class ext
             <livewire:arena.token-return :match="$this->match" :key="'token-return-' . $this->match->id" />
         @endif
     </main>
+
+    {{-- Free Color Selection Modal --}}
+    @if ($showFreeColorModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div class="bg-surface-container p-8 rounded-3xl border border-outline-variant/10 max-w-md w-full mx-4 space-y-6">
+                <div class="text-center">
+                    <span class="material-symbols-outlined text-5xl text-secondary mb-2">stars</span>
+                    <h2 class="text-2xl font-black font-display text-on-surface uppercase">Dado Livre!</h2>
+                    <p class="text-sm text-on-surface-variant mt-2">Escolha a cor do token que deseja receber</p>
+                </div>
+                <div class="grid grid-cols-5 gap-3">
+                    @foreach (['red' => 'Vermelho', 'green' => 'Verde', 'white' => 'Branco', 'yellow' => 'Amarelo', 'blue' => 'Azul'] as $slug => $label)
+                        <button
+                            wire:click="selectFreeColor('{{ $slug }}')"
+                            class="flex flex-col items-center gap-2 p-3 rounded-xl border border-outline-variant/10 bg-surface-container-low hover:bg-surface-container transition-all hover:scale-105"
+                        >
+                            <x-token-dot :color="$slug" size="lg" />
+                            <span class="text-[10px] font-bold uppercase text-on-surface-variant">{{ $label }}</span>
+                        </button>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    @endif
 </div>

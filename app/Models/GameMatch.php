@@ -75,7 +75,7 @@ class GameMatch extends Model
 
     public function quotationCards(): BelongsToMany
     {
-        return $this->belongsToMany(QuotationCard::class, 'match_quotation_cards')
+        return $this->belongsToMany(QuotationCard::class, 'match_quotation_cards', 'match_id')
             ->withTimestamps();
     }
 

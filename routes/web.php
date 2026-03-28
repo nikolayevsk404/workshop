@@ -46,5 +46,7 @@ Route::middleware('auth')->group(function () {
     // Protected routes (auth + verified)
     Route::middleware('verified')->group(function () {
         Route::livewire('/arena', 'pages::arena.index')->name('arena');
+        Route::livewire('/arena/new-match', 'pages::arena.match-setup')->name('arena.match-setup');
+        Route::livewire('/arena/match/{match}', 'pages::arena.match-show')->name('arena.match.show');
     });
 });

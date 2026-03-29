@@ -24,19 +24,10 @@ new #[Layout('layouts::app')] #[Title('Configurações')] class extends Componen
     {
         $this->profileForm->validate();
 
-        $user = auth()->user();
-        $emailChanged = $user->email !== $this->profileForm->email;
-
-        $user->update([
+        auth()->user()->update([
             'username' => $this->profileForm->username,
             'email' => $this->profileForm->email,
         ]);
-
-        if ($emailChanged) {
-            $user->email_verified_at = null;
-            $user->save();
-            $user->sendEmailVerificationNotification();
-        }
 
         session()->flash('success', 'Perfil atualizado com sucesso!');
     }

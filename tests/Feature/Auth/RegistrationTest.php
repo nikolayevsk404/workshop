@@ -114,7 +114,7 @@ it('redirects to arena after successful registration', function () {
         ->assertRedirect(route('arena'));
 });
 
-it('sends verification email upon registration', function () {
+it('does not send verification email upon registration', function () {
     Event::fake();
 
     Livewire::test('pages::auth.register')
@@ -124,5 +124,5 @@ it('sends verification email upon registration', function () {
         ->set('form.password_confirmation', 'password123')
         ->call('save');
 
-    Event::assertDispatched(Registered::class);
+    Event::assertNotDispatched(Registered::class);
 });

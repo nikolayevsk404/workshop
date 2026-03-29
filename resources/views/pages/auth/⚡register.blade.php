@@ -2,7 +2,7 @@
 
 use App\Livewire\Forms\RegisterForm;
 use App\Models\User;
-use Illuminate\Auth\Events\Registered;
+
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -16,8 +16,6 @@ new #[Layout('layouts::guest')] #[Title('Criar Conta')] class extends Component
         $this->form->validate();
 
         $user = User::create($this->form->only(['username', 'email', 'password']));
-
-        event(new Registered($user));
 
         auth()->login($user);
 

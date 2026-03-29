@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -18,21 +17,6 @@ Route::middleware('guest')->group(function () {
 
 // Auth routes
 Route::middleware('auth')->group(function () {
-    // Email verification
-    Route::livewire('/email/verify', 'pages::auth.verify-email')->name('verification.notice');
-
-    Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
-        $request->fulfill();
-
-        return redirect()->route('arena');
-    })->middleware('signed')->name('verification.verify');
-
-    Route::post('/email/verification-notification', function (Request $request) {
-        $request->user()->sendEmailVerificationNotification();
-
-        return back()->with('success', 'Link de verificação reenviado!');
-    })->middleware('throttle:6,1')->name('verification.send');
-
     // Logout
     Route::post('/logout', function (Request $request) {
         auth()->guard('web')->logout();
@@ -43,13 +27,10 @@ Route::middleware('auth')->group(function () {
         return redirect()->route('login');
     })->name('logout');
 
-    // Protected routes (auth + verified)
-    Route::middleware('verified')->group(function () {
-        Route::livewire('/arena', 'pages::arena.index')->name('arena');
-        Route::livewire('/arena/new-match', 'pages::arena.match-setup')->name('arena.match-setup');
-        Route::livewire('/arena/match/{match}', 'pages::arena.match-board')->name('arena.match.show');
-        Route::livewire('/arena/match/{match}/results', 'pages::arena.match-results')->name('arena.match.results');
-        Route::livewire('/leaderboard', 'pages::leaderboard.index')->name('leaderboard');
-        Route::livewire('/settings', 'pages::settings.index')->name('settings');
-    });
+    Route::livewire('/arena', 'pages::arena.index')->name('arena');
+    Route::livewire('/arena/new-match', 'pages::arena.match-setup')->name('arena.match-setup');
+    Route::livewire('/arena/match/{match}', 'pages::arena.match-board')->name('arena.match.show');
+    Route::livewire('/arena/match/{match}/results', 'pages::arena.match-results')->name('arena.match.results');
+    Route::livewire('/leaderboard', 'pages::leaderboard.index')->name('leaderboard');
+    Route::livewire('/settings', 'pages::settings.index')->name('settings');
 });

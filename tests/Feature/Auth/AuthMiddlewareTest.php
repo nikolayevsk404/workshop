@@ -18,10 +18,10 @@ it('allows authenticated user to access arena', function () {
         ->assertStatus(200);
 });
 
-it('redirects unverified user to verification notice', function () {
+it('allows unverified user to access arena', function () {
     $user = User::factory()->unverified()->create();
 
     $this->actingAs($user)
         ->get('/arena')
-        ->assertRedirect(route('verification.notice'));
+        ->assertStatus(200);
 });

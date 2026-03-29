@@ -1,9 +1,7 @@
 <?php
 
 use App\Models\User;
-use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Notification;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -28,13 +26,10 @@ it('allows user to update username', function () {
     expect($user->fresh()->username)->toBe('newname');
 });
 
-it('allows user to update email and triggers re-verification', function () {
-    Notification::fake();
-
+it('allows user to update email without re-verification', function () {
     $user = User::factory()->create([
         'username' => 'jogador',
         'email' => 'old@test.com',
-        'email_verified_at' => now(),
     ]);
 
     Livewire::actingAs($user)
@@ -43,11 +38,7 @@ it('allows user to update email and triggers re-verification', function () {
         ->call('updateProfile')
         ->assertHasNoErrors();
 
-    $user->refresh();
-    expect($user->email)->toBe('new@test.com');
-    expect($user->email_verified_at)->toBeNull();
-
-    Notification::assertSentTo($user, VerifyEmail::class);
+    expect($user->fresh()->email)->toBe('new@test.com');
 });
 
 it('fails username update with duplicate username', function () {

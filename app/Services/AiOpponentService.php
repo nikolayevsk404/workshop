@@ -6,6 +6,7 @@ use App\Ai\Agents\EasyAgent;
 use App\Ai\Agents\HardAgent;
 use App\Ai\Agents\MediumAgent;
 use App\Models\GameMatch;
+use function auth;
 
 class AiOpponentService
 {
@@ -21,6 +22,12 @@ class AiOpponentService
             'gameMatch' => $match,
         ]);
 
-        return $agent->continue($match->id, as: auth()->user())->stream('Sua Vez! Faça a sua jogada e explique a estrategia');
+        if ($match->difficultyTier->slug == 'mestre-do-caos') {
+            return $agent->continue($match->id, as: auth()->user())->stream('Sua Vez! Faça a sua jogada e explique a estrategia');
+        }
+
+        return $agent->stream('Sua Vez! Faça a sua jogada e explique a estrategia');
+
+
     }
 }
